@@ -1,44 +1,62 @@
-import { Router } from 'express';
+import { Router } from "express";
+// Removed connectDb import as it will be initialized during app startup
+import User from "./model.js";
+import bcrypt from "bcryptjs";
 import { connectToDatabase } from "../../config/db.js";
-import express from "express";
-import User from "./model.js"
-import bcrypt from "bcryptjs"
-
-const bcryptSalt = bcrypt.genSaltSync();
 
 const router = Router();
-
-// Middleware to parse JSON
-router.use(express.json());
-
+const bcryptSalt = bcrypt.genSaltSync();
 
 router.get("/", async (req, res) => {
-  // Database connection is already established at startup
+  // Removed redundant connectDb call
+
   try {
-    const { page = 1, limit = 10 } = req.query;
-    const userDoc = await User.find()
-      .skip((page - 1) * limit)
-      .limit(Number(limit));
+    const userDoc = await User.find();
+
     res.json(userDoc);
   } catch (error) {
-    res.status(500).json({ message: "Failed to create a new user", error });
+    res.status(500).json(error);
   }
-})
-
+});
 
 router.post("/", async (req, res) => {
+  connectToDatabase();
+
   const { name, email, password } = req.body;
   const encryptedPassword = bcrypt.hashSync(password, bcryptSalt);
-  connectToDatabase();
+
   try {
-    const newUserDocument = await User.create({
+    const newUserDoc = await User.create({
       name,
       email,
       password: encryptedPassword,
     });
-    res.json(newUserDocument);
+
+    res.json(newUserDoc);
   } catch (error) {
-    res.status(500).json({ error });
+    res.status(500).json(error);
+  }
+});
+
+router.post("/login", async (req, res) => {
+  connectToDatabase();
+  const { email, password } = req.body;
+
+  try {
+    const userDoc = await User.findOne({ email });
+
+    if (userDoc) {
+      const passwordCorrect = bcrypt.compareSync(password, userDoc.password);
+      const { name, _id } = userDoc;
+
+      passwordCorrect
+        ? res.json({ name, email, _id })
+        : res.status(400).json("Senha inválida!");
+    } else {
+      res.status(400).json("Usuário não encontrado!");
+    }
+  } catch (error) {
+    res.status(500).json(error);
   }
 });
 
